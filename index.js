@@ -46,7 +46,32 @@ async function run() {
       res.send(result);
     });
 
+    app.delete("/comments/:id", async (req, res) => {
+      const { id } = req.params;
 
+      const result = await commentCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+
+      res.send(result);
+    });
+
+    app.patch("/comments/:id", async (req, res) => {
+      const { id } = req.params;
+
+      const updatedComment = req.body;
+
+      const result = await commentCollection.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            comment: updatedComment.comment,
+          },
+        },
+      );
+
+      res.send(result);
+    });
 
     app.get("/ideas", async (req, res) => {
       const result = await ideaCollection.find().limit(6).toArray();
