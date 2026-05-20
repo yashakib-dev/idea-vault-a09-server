@@ -94,6 +94,38 @@ async function run() {
       res.json(result);
     });
 
+    app.get("/my-ideas/:email", async (req, res) => {
+      const email = req.params.email;
+
+      const result = await ideaCollection.find({ userEmail: email }).toArray();
+
+      res.json(result);
+    });
+
+    app.delete("/ideas/:id", async (req, res) => {
+      const { id } = req.params;
+
+      const result = await ideaCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+
+      res.send(result);
+    });
+
+    app.patch("/ideas/:id", async (req, res) => {
+      const { id } = req.params;
+      const updatedData = req.body;
+
+      const result = await ideaCollection.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: updatedData,
+        },
+      );
+
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
