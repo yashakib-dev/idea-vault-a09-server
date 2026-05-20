@@ -126,6 +126,16 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/my-comments/:email", async (req, res) => {
+      const { email } = req.params;
+
+      const result = await commentCollection
+        .find({ userEmail: email })
+        .toArray();
+
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
