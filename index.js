@@ -19,32 +19,30 @@ const client = new MongoClient(uri, {
   },
 });
 
- const JWKS = createRemoteJWKSet(
-      new URL('http://localhost:3000/api/auth/jwks')
-    )
+const JWKS = createRemoteJWKSet(new URL(`${process.env.CLIENT_URL}/api/auth/jwks`));
 
-const verifyToken = async(req, res, next) => {
+const verifyToken = async (req, res, next) => {
   const authHeader = req?.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ message: "Unauthorized access" });
   }
   const token = authHeader?.split(" ")[1];
-  if(!token){
+  if (!token) {
     return res.status(401).json({ message: "Unauthorized access" });
   }
-next();
-
+  next();
 };
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    
+    // await client.connect();
 
     const db = client.db("ideaVault");
     const ideaCollection = db.collection("idea");
 
     const commentCollection = db.collection("comments");
+    const usersCollection = db.collection("users");
 
     app.post("/comments", async (req, res) => {
       const commentData = req.body;
@@ -96,9 +94,39 @@ async function run() {
       const result = await ideaCollection.find().limit(6).toArray();
       res.json(result);
     });
+
     app.get("/all-ideas", async (req, res) => {
-      const result = await ideaCollection.find().toArray();
-      res.json(result);
+      const { search, category, startDate, endDate } = req.query;
+
+      let query = {};
+
+      if (search) {
+        query.title = {
+          $regex: search,
+          $options: "i",
+        };
+      }
+
+      if (category && category !== "All") {
+        query.category = category;
+      }
+
+
+      if (startDate || endDate) {
+        query.createdAt = {};
+
+        if (startDate) {
+          query.createdAt.$gte = startDate;
+        }
+
+        if (endDate) {
+          query.createdAt.$lte = endDate;
+        }
+      }
+
+      const result = await ideaCollection.find(query).toArray();
+
+      res.send(result);
     });
 
     app.post("/ideas", async (req, res) => {
@@ -107,7 +135,7 @@ async function run() {
       res.json(result);
     });
 
-    app.get("/ideas/:id",verifyToken,async (req, res) => {
+    app.get("/ideas/:id", verifyToken, async (req, res) => {
       const { id } = req.params;
       const result = await ideaCollection.findOne({ _id: new ObjectId(id) });
       res.json(result);
@@ -155,8 +183,30 @@ async function run() {
       res.send(result);
     });
 
+   app.patch("/users/:email", async (req, res) => {
+  const { email } = req.params;
+
+  const updatedData = req.body;
+
+  const result = await usersCollection.updateOne(
+    { email },
+    { $set: updatedData },
+    { upsert: true }
+  );
+
+  res.send(result);
+});
+
+app.get("/users/:email", async (req, res) => {
+  const { email } = req.params;
+
+  const user = await usersCollection.findOne({ email });
+
+  res.send(user);
+});
+
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!",
     );
