@@ -35,7 +35,7 @@ const verifyToken = async (req, res, next) => {
 
 async function run() {
   try {
-    
+
     // await client.connect();
 
     const db = client.db("ideaVault");
@@ -176,63 +176,42 @@ async function run() {
     app.get("/my-comments/:email", async (req, res) => {
       const { email } = req.params;
 
-      const comments = await commentCollection
+      const result = await commentCollection
         .find({ userEmail: email })
-        .sort({ createdAt: -1 })
         .toArray();
 
-      const commentsWithIdea = await Promise.all(
-        comments.map(async (c) => {
-          let ideaTitle = c.ideaTitle;
-          if (!ideaTitle && c.ideaId) {
-            try {
-              const idea = await ideaCollection.findOne({ _id: new ObjectId(c.ideaId) });
-              if (idea) {
-                ideaTitle = idea.title;
-              }
-            } catch (err) {
-              console.error("Error fetching idea for comment:", err);
-            }
-          }
-          return {
-            ...c,
-            ideaTitle: ideaTitle || "Untitled Idea",
-          };
-        })
-      );
-
-      res.send(commentsWithIdea);
+      res.send(result);
     });
 
-   app.patch("/users/:email", async (req, res) => {
-  const { email } = req.params;
+    app.patch("/users/:email", async (req, res) => {
+      const { email } = req.params;
 
-  const updatedData = req.body;
+      const updatedData = req.body;
 
-  const result = await usersCollection.updateOne(
-    { email },
-    { $set: updatedData },
-    { upsert: true }
-  );
+      const result = await usersCollection.updateOne(
+        { email },
+        { $set: updatedData },
+        { upsert: true }
+      );
 
-  res.send(result);
-});
+      res.send(result);
+    });
 
-app.get("/users/:email", async (req, res) => {
-  const { email } = req.params;
+    app.get("/users/:email", async (req, res) => {
+      const { email } = req.params;
 
-  const user = await usersCollection.findOne({ email });
+      const user = await usersCollection.findOne({ email });
 
-  res.send(user);
-});
+      res.send(user);
+    });
 
-   
+
     // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!",
     );
   } finally {
-    
+
     // await client.close();
   }
 }
