@@ -176,11 +176,32 @@ async function run() {
     app.get("/my-comments/:email", async (req, res) => {
       const { email } = req.params;
 
-      const result = await commentCollection
+      const comments = await commentCollection
         .find({ userEmail: email })
+        .sort({ createdAt: -1 })
         .toArray();
 
-      res.send(result);
+      const commentsWithIdea = await Promise.all(
+        comments.map(async (c) => {
+          let ideaTitle = c.ideaTitle;
+          if (!ideaTitle && c.ideaId) {
+            try {
+              const idea = await ideaCollection.findOne({ _id: new ObjectId(c.ideaId) });
+              if (idea) {
+                ideaTitle = idea.title;
+              }
+            } catch (err) {
+              console.error("Error fetching idea for comment:", err);
+            }
+          }
+          return {
+            ...c,
+            ideaTitle: ideaTitle || "Untitled Idea",
+          };
+        })
+      );
+
+      res.send(commentsWithIdea);
     });
 
    app.patch("/users/:email", async (req, res) => {
