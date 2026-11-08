@@ -614,14 +614,15 @@ if (require.main === module) {
   });
 }
 
-module.exports = {
-  app,
-  createApp,
-  createDefaultJwtVerifier,
-  createRedisClient,
-  createCacheService,
-  createCommentStream,
-  signAccessToken,
-  refreshAccessToken,
-  startServer,
-};
+// Export the Express app directly as module.exports for @vercel/node compatibility,
+// while attaching helpers for testing/integration.
+module.exports = app;
+module.exports.app = app;
+module.exports.createApp = createApp;
+module.exports.createDefaultJwtVerifier = createDefaultJwtVerifier;
+module.exports.createRedisClient = createRedisClient;
+module.exports.createCacheService = createCacheService;
+module.exports.createCommentStream = createCommentStream;
+module.exports.signAccessToken = signAccessToken;
+module.exports.refreshAccessToken = refreshAccessToken;
+module.exports.startServer = startServer;
