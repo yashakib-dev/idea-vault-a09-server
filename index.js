@@ -25,6 +25,18 @@ const client = new MongoClient(uri, {
   },
 });
 
+// Lazy connection promise — reused across serverless invocations
+let _connectPromise = null;
+const connectOnce = () => {
+  if (!_connectPromise) {
+    _connectPromise = client.connect().catch((err) => {
+      _connectPromise = null; // allow retry on next invocation
+      throw err;
+    });
+  }
+  return _connectPromise;
+};
+
 // JOSE Token Utilities
 const signAccessToken = async (payload, expiresIn = "1h") => {
   return new SignJWT({ ...payload })
@@ -174,10 +186,27 @@ const createApp = ({
   commentStream = createCommentStream(),
 } = {}) => {
   const app = express();
-  const database = db || client.db("ideaVault");
-  const ideaCollection = database.collection("idea");
-  const commentCollection = database.collection("comments");
-  const usersCollection = database.collection("users");
+  // Resolve collections lazily — safe for both serverless (Vercel) and persistent servers.
+  // The connectOnce() middleware guarantees the client is connected before any route runs.
+  const getDb = () => db || client.db("ideaVault");
+  const ideaCollection = new Proxy({}, {
+    get: (_, prop) => {
+      const col = getDb().collection("idea");
+      return typeof col[prop] === "function" ? col[prop].bind(col) : col[prop];
+    },
+  });
+  const commentCollection = new Proxy({}, {
+    get: (_, prop) => {
+      const col = getDb().collection("comments");
+      return typeof col[prop] === "function" ? col[prop].bind(col) : col[prop];
+    },
+  });
+  const usersCollection = new Proxy({}, {
+    get: (_, prop) => {
+      const col = getDb().collection("users");
+      return typeof col[prop] === "function" ? col[prop].bind(col) : col[prop];
+    },
+  });
   const cache = createCacheService(redisClient);
 
   const defaultLimiter = rateLimit({
@@ -198,6 +227,17 @@ const createApp = ({
 
   app.use(cors());
   app.use(express.json());
+
+  // Ensure MongoDB is connected before handling any request (serverless-safe)
+  app.use(async (req, res, next) => {
+    try {
+      await connectOnce();
+      next();
+    } catch (err) {
+      console.error("MongoDB connection failed:", err.message);
+      res.status(503).json({ message: "Database unavailable" });
+    }
+  });
 
   // Apply rate limiting middleware
   if (limiter !== false) {
@@ -253,6 +293,17 @@ const createApp = ({
       req.user = payload;
       return next();
     } catch (error) {
+      // Support automatic token refresh if client requests it
+      if (req.headers["x-auto-refresh"] === "true") {
+        try {
+          const refreshed = await refreshAccessToken(token);
+          res.setHeader("X-Refreshed-Token", refreshed.token);
+          req.user = refreshed.payload;
+          return next();
+        } catch {
+          // Fall through — optional auth, so just continue without user
+        }
+      }
       req.user = null;
       return next();
     }
@@ -449,8 +500,8 @@ const createApp = ({
     res.json(result);
   });
 
-  // Hot read endpoint: single idea cached
-  app.get("/ideas/:id", verifyToken, async (req, res) => {
+  // Hot read endpoint: single idea cached (optionalVerifyToken — public read access)
+  app.get("/ideas/:id", optionalVerifyToken, async (req, res) => {
     const { id } = req.params;
     const cacheKey = `ideas:item:${id}`;
 
@@ -552,6 +603,8 @@ async function startServer() {
   return server;
 }
 
+// Module-level app for Vercel serverless export.
+// connectOnce() middleware (registered inside createApp) handles lazy DB connection per-request.
 const app = createApp();
 
 if (require.main === module) {
