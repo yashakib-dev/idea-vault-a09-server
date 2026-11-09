@@ -228,8 +228,12 @@ const createApp = ({
   app.use(cors());
   app.use(express.json());
 
-  // Ensure MongoDB is connected before handling any request (serverless-safe)
+  // Ensure MongoDB is connected before handling requests when using the shared client.
   app.use(async (req, res, next) => {
+    if (db) {
+      return next();
+    }
+
     try {
       await connectOnce();
       next();

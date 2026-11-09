@@ -1,5 +1,6 @@
 const request = require("supertest");
 const rateLimit = require("express-rate-limit");
+const { MongoClient } = require("mongodb");
 const {
   createApp,
   signAccessToken,
@@ -130,6 +131,23 @@ describe("IdeaVault backend API", () => {
     const response = await request(app).get("/");
     expect(response.status).toBe(200);
     expect(response.text).toBe("Hello World!");
+  });
+
+  test("injected db bypasses shared MongoClient connection middleware", async () => {
+    const { db } = createMockDb();
+    const connectSpy = jest
+      .spyOn(MongoClient.prototype, "connect")
+      .mockRejectedValue(new Error("connect should not be called"));
+
+    try {
+      const app = createApp({ db, jwtVerifier });
+      const response = await request(app).get("/");
+
+      expect(response.status).toBe(200);
+      expect(connectSpy).not.toHaveBeenCalled();
+    } finally {
+      connectSpy.mockRestore();
+    }
   });
 
   test("GET /ideas returns the latest featured ideas", async () => {
